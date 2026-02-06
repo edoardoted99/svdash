@@ -1,0 +1,106 @@
+{% extends "ui/base.html" %}
+
+{% block content %}
+<div class="flex flex-1 h-full overflow-hidden">
+    <!-- Left Panel: Input -->
+    <div class="w-1/3 bg-slate-800 border-r border-slate-700 flex flex-col p-4 gap-4 overflow-y-auto">
+        <h2 class="text-indigo-400 font-semibold mb-2"><i class="fa-solid fa-pen-to-square mr-2"></i>Transformation
+            Request</h2>
+
+        <form hx-post="{% url 'ui:transform_action' %}" hx-target="#result-panel" hx-indicator="#loading"
+            hx-include="#navbar-model-selector" class="flex flex-col gap-4 h-full">
+            {% csrf_token %}
+
+            <!-- Prompt -->
+            <div class="flex flex-col gap-1">
+                <label class="text-xs font-bold text-slate-400 uppercase">System Prompt / Instruction</label>
+                <textarea name="prompt" rows="3"
+                    class="bg-slate-900 border border-slate-700 rounded p-3 focus:border-indigo-500 focus:outline-none text-sm resize-none"
+                    placeholder="e.g. Update Alice's name to Alice Cooper...">Mi chiamo Edoardo. Il mio cognome è Tedesco e mio fratello si chiama Lorenzo</textarea>
+            </div>
+
+            <!-- KG Input (CodeMirror) -->
+            <div class="flex flex-col gap-1 flex-grow min-h-[300px]">
+                <label class="text-xs font-bold text-slate-400 uppercase">Input Knowledge Graph (JSON-LD)</label>
+                <div class="border border-slate-700 rounded overflow-hidden flex-grow relative">
+                    <textarea id="kg-input" name="kg_data_raw"></textarea>
+                </div>
+            </div>
+
+            <!-- Hidden Input for processed JSON if needed, or we just post raw text -->
+
+            <!-- Submit -->
+            <button type="submit"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
+                <span>Transform Knowledge Graph</span>
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+            <div id="loading" class="htmx-indicator text-center text-indigo-400 text-sm">
+                <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Processing with LLM...
+            </div>
+        </form>
+    </div>
+
+    <!-- Right Panel: Output & Visualization -->
+    <div id="result-panel" class="w-2/3 bg-slate-900 flex flex-col p-4 gap-4 overflow-y-auto relative">
+        <!-- Placeholder State -->
+        <div class="flex flex-col items-center justify-center h-full text-slate-600 opacity-50">
+            <i class="fa-solid fa-network-wired text-9xl mb-6"></i>
+            <p class="text-xl">Ready to transform.</p>
+            <p class="text-sm">Enter a prompt and input graph on the left.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Store editor globally so HTMX event listener can access it
+    window.kgEditor = null;
+
+    // Initialize CodeMirror for Input
+    document.addEventListener("DOMContentLoaded", function () {
+        const inputArea = document.getElementById("kg-input");
+        window.kgEditor = CodeMirror.fromTextArea(inputArea, {
+            mode: "application/ld+json",
+            theme: "dracula",
+            lineNumbers: true,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            lineWrapping: true
+        });
+
+        // Pre-fill with sample
+        const sampleKG = {
+            "@context": "https://schema.org",
+            "@graph": [
+                {
+                    "@id": "http://example.org/alice",
+                    "@type": "Person",
+                    "name": "Alice",
+                    "jobTitle": "Developer"
+                },
+                {
+                    "@id": "http://example.org/acme",
+                    "@type": "Organization",
+                    "name": "Acme Corp"
+                }
+            ]
+        };
+        window.kgEditor.setValue(JSON.stringify(sampleKG, null, 2));
+        // Immediately save initial value to textarea
+        window.kgEditor.save();
+
+        // Ensure CodeMirror content is synced to textarea on every change
+        window.kgEditor.on("change", function () {
+            window.kgEditor.save();
+        });
+    });
+
+    // Force sync before HTMX request - this must be OUTSIDE DOMContentLoaded
+    document.body.addEventListener('htmx:configRequest', function (evt) {
+        if (window.kgEditor) {
+            window.kgEditor.save();
+            console.log("HTMX: Synced CodeMirror to textarea. Value length:", document.getElementById("kg-input").value.length);
+        }
+    });
+</script>
+{% endblock %}
