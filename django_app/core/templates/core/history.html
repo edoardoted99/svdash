@@ -1,0 +1,48 @@
+{% extends "core/base.html" %}
+{% block title %}SVDash — History{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Analysis History</h1>
+
+{% if analyses %}
+<div class="history-table-wrap">
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Size</th>
+                <th>k₉₅</th>
+                <th>PSNR</th>
+                <th>SSIM</th>
+                <th>Date</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in analyses %}
+            <tr>
+                <td>
+                    <div class="table-thumb">
+                        <img src="{{ a.image.url }}" alt="">
+                    </div>
+                </td>
+                <td class="td-name">{{ a }}</td>
+                <td>{{ a.width }}×{{ a.height }}</td>
+                <td class="td-mono">{{ a.k_95 }}</td>
+                <td class="td-mono">{{ a.psnr }} dB</td>
+                <td class="td-mono">{{ a.ssim }}</td>
+                <td class="td-date">{{ a.created_at|date:"d M Y H:i" }}</td>
+                <td><a href="{% url 'analysis' pk=a.pk %}" class="btn btn-sm">View →</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <span class="empty-icon">◇</span>
+    <p>No analyses yet. <a href="{% url 'index' %}">Upload an image</a> to get started.</p>
+</div>
+{% endif %}
+{% endblock %}

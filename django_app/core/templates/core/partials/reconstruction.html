@@ -1,0 +1,28 @@
+<div class="recon-grid">
+    <div class="recon-img-wrap">
+        <img src="data:image/png;base64,{{ result.images.reconstructed }}" alt="Reconstructed" class="result-img">
+        <span class="img-label">Reconstructed (k={{ n_components }})</span>
+    </div>
+    <div class="recon-img-wrap">
+        <img src="data:image/png;base64,{{ result.images.difference }}" alt="Difference" class="result-img">
+        <span class="img-label">Difference (5× amplified)</span>
+    </div>
+</div>
+<div class="recon-metrics">
+    <div class="metric">
+        <span class="metric-label">PSNR</span>
+        <span class="metric-value">{{ result.metrics.psnr_db }} dB</span>
+    </div>
+    <div class="metric">
+        <span class="metric-label">SSIM</span>
+        <span class="metric-value">{{ result.metrics.ssim }}</span>
+    </div>
+    <div class="metric">
+        <span class="metric-label">Compression</span>
+        <span class="metric-value">{{ result.metrics.compression_ratio }}×</span>
+    </div>
+    <div class="metric">
+        <span class="metric-label">Time</span>
+        <span class="metric-value">{{ result.timing.total_seconds }}s</span>
+    </div>
+</div>

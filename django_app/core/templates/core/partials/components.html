@@ -1,0 +1,12 @@
+<div class="components-grid">
+    {% for comp in result.components %}
+    <div class="component-card">
+        <img src="data:image/png;base64,{{ comp.image }}" alt="Component {{ comp.index }}" class="component-img">
+        <div class="component-info">
+            <span class="component-idx">σ<sub>{{ comp.index }}</sub></span>
+            <span class="component-sv">{{ comp.singular_value|floatformat:1 }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<p class="components-hint">Channel: {{ channel }} — Each image shows the contribution of a single component (U[:,k] · S[k] · Vt[k,:]), normalized for display.</p>

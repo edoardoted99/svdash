@@ -1,0 +1,154 @@
+{% extends "core/base.html" %}
+{% block title %}SVDash — Compare{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Compare Analyses</h1>
+
+<form method="get" class="compare-selector">
+    <div class="compare-select-group">
+        <label class="form-label">Analysis A</label>
+        <select name="a" class="form-input" onchange="this.form.submit()">
+            <option value="">Select...</option>
+            {% for a in analyses %}
+            <option value="{{ a.pk }}" {% if analysis_a and analysis_a.pk == a.pk %}selected{% endif %}>
+                {{ a }} ({{ a.width }}×{{ a.height }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <span class="compare-vs">vs</span>
+    <div class="compare-select-group">
+        <label class="form-label">Analysis B</label>
+        <select name="b" class="form-input" onchange="this.form.submit()">
+            <option value="">Select...</option>
+            {% for a in analyses %}
+            <option value="{{ a.pk }}" {% if analysis_b and analysis_b.pk == a.pk %}selected{% endif %}>
+                {{ a }} ({{ a.width }}×{{ a.height }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+{% if analysis_a and analysis_b %}
+<div class="compare-grid">
+    <!-- Image comparison -->
+    <div class="compare-images">
+        <div class="compare-img-wrap">
+            <img src="{{ analysis_a.image.url }}" alt="{{ analysis_a }}" class="result-img">
+            <span class="img-label">{{ analysis_a }}</span>
+        </div>
+        <div class="compare-img-wrap">
+            <img src="{{ analysis_b.image.url }}" alt="{{ analysis_b }}" class="result-img">
+            <span class="img-label">{{ analysis_b }}</span>
+        </div>
+    </div>
+
+    <!-- Metrics comparison -->
+    <div class="compare-table-wrap">
+        <table class="compare-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>{{ analysis_a }}</th>
+                    <th>{{ analysis_b }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Dimensions</td>
+                    <td>{{ analysis_a.width }}×{{ analysis_a.height }}</td>
+                    <td>{{ analysis_b.width }}×{{ analysis_b.height }}</td>
+                </tr>
+                <tr>
+                    <td>Max Components</td>
+                    <td>{{ analysis_a.max_components }}</td>
+                    <td>{{ analysis_b.max_components }}</td>
+                </tr>
+                <tr>
+                    <td>k for 90%</td>
+                    <td>{{ analysis_a.k_90 }}</td>
+                    <td>{{ analysis_b.k_90 }}</td>
+                </tr>
+                <tr>
+                    <td>k for 95%</td>
+                    <td class="highlight">{{ analysis_a.k_95 }}</td>
+                    <td class="highlight">{{ analysis_b.k_95 }}</td>
+                </tr>
+                <tr>
+                    <td>k for 99%</td>
+                    <td>{{ analysis_a.k_99 }}</td>
+                    <td>{{ analysis_b.k_99 }}</td>
+                </tr>
+                <tr>
+                    <td>PSNR (at k=50)</td>
+                    <td>{{ analysis_a.psnr }} dB</td>
+                    <td>{{ analysis_b.psnr }} dB</td>
+                </tr>
+                <tr>
+                    <td>SSIM (at k=50)</td>
+                    <td>{{ analysis_a.ssim }}</td>
+                    <td>{{ analysis_b.ssim }}</td>
+                </tr>
+                <tr>
+                    <td>Compute Time</td>
+                    <td>{{ analysis_a.compute_time }}s</td>
+                    <td>{{ analysis_b.compute_time }}s</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Overlaid cumulative variance -->
+    <div class="panel">
+        <h2 class="panel-title">Cumulative Variance Comparison</h2>
+        <div class="chart-container" id="chart-compare"></div>
+    </div>
+</div>
+
+<script>
+const plotConfig = { responsive: true, displayModeBar: false };
+const plotLayout = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'JetBrains Mono', color: '#8892a4', size: 11 },
+    margin: { t: 40, r: 20, b: 50, l: 60 },
+    xaxis: { gridcolor: '#1a2332', zerolinecolor: '#1a2332', title: 'Components' },
+    yaxis: { gridcolor: '#1a2332', zerolinecolor: '#1a2332', range: [0, 1.05] },
+};
+
+const dataA = {{ analysis_a.results_json|safe }};
+const dataB = {{ analysis_b.results_json|safe }};
+
+const traces = [];
+if (dataA.cumulative_variance && dataA.cumulative_variance.R) {
+    traces.push({
+        y: dataA.cumulative_variance.R,
+        name: '{{ analysis_a }} (R)',
+        line: { color: '#ff6b6b', width: 2 },
+    });
+}
+if (dataB.cumulative_variance && dataB.cumulative_variance.R) {
+    traces.push({
+        y: dataB.cumulative_variance.R,
+        name: '{{ analysis_b }} (R)',
+        line: { color: '#4ecdc4', width: 2, dash: 'dash' },
+    });
+}
+
+const shapes = [0.9, 0.95, 0.99].map(t => ({
+    type: 'line', x0: 0, x1: 1, xref: 'paper',
+    y0: t, y1: t,
+    line: { color: '#3a4a5c', width: 1, dash: 'dot' },
+}));
+
+Plotly.newPlot('chart-compare', traces, { ...plotLayout, shapes }, plotConfig);
+</script>
+
+{% elif not analysis_a and not analysis_b %}
+<div class="empty-state">
+    <span class="empty-icon">⟷</span>
+    <p>Select two analyses above to compare them.</p>
+</div>
+{% endif %}
+{% endblock %}

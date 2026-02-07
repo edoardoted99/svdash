@@ -1,0 +1,116 @@
+{% extends "core/base.html" %}
+{% block title %}SVDash — Upload{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1 class="hero-title">Image Decomposition<br><span class="hero-accent">Analysis Engine</span></h1>
+    <p class="hero-sub">Upload an image to perform SVD/PCA decomposition. Analyze singular values, reconstruct at variable rank, and measure quality metrics.</p>
+
+    <div class="server-status">
+        <span class="status-dot {% if server_ok %}status-ok{% else %}status-err{% endif %}"></span>
+        <span class="status-text">Compute server: {% if server_ok %}online (MPS){% else %}offline{% endif %}</span>
+    </div>
+</div>
+
+<div class="upload-section">
+    <form method="post" action="{% url 'upload' %}" enctype="multipart/form-data" class="upload-form" id="upload-form">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label class="form-label" for="id_title">Analysis Name</label>
+            {{ form.title }}
+        </div>
+
+        <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone-inner">
+                <div class="drop-icon">⬡</div>
+                <p class="drop-text">Drop image here or <label for="id_image" class="drop-browse">browse</label></p>
+                <p class="drop-hint">JPG, PNG — any resolution</p>
+                {{ form.image }}
+            </div>
+            <div class="drop-preview" id="drop-preview" style="display:none;">
+                <img id="preview-img" src="" alt="Preview">
+                <span class="preview-name" id="preview-name"></span>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+            <span class="btn-icon">▸</span>
+            Decompose
+        </button>
+    </form>
+</div>
+
+{% if recent %}
+<div class="recent-section">
+    <h2 class="section-title">Recent Analyses</h2>
+    <div class="recent-grid">
+        {% for a in recent %}
+        <a href="{% url 'analysis' pk=a.pk %}" class="recent-card">
+            <div class="recent-thumb">
+                <img src="{{ a.image.url }}" alt="{{ a.title }}">
+            </div>
+            <div class="recent-info">
+                <span class="recent-name">{{ a }}</span>
+                <span class="recent-meta">{{ a.width }}×{{ a.height }} · k₉₅={{ a.k_95 }} · SSIM={{ a.ssim }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('id_image');
+const preview = document.getElementById('drop-preview');
+const previewImg = document.getElementById('preview-img');
+const previewName = document.getElementById('preview-name');
+const submitBtn = document.getElementById('submit-btn');
+const dropInner = dropZone.querySelector('.drop-zone-inner');
+
+function showPreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        previewName.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+        dropInner.style.display = 'none';
+        preview.style.display = 'flex';
+        submitBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+}
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) showPreview(e.target.files[0]);
+});
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length) {
+        fileInput.files = files;
+        showPreview(files[0]);
+    }
+});
+
+// Loading state on submit
+document.getElementById('upload-form').addEventListener('submit', () => {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="btn-icon spinner">◌</span> Computing SVD...';
+});
+</script>
+{% endblock %}
