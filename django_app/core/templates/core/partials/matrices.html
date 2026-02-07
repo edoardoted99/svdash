@@ -1,0 +1,20 @@
+<div class="matrices-grid">
+    {% if result.u_heatmap %}
+    <div class="matrix-item">
+        <img src="data:image/png;base64,{{ result.u_heatmap }}" alt="U heatmap" class="matrix-img">
+        <span class="img-label">U matrix — first 50 columns (ch: {{ channel }})</span>
+    </div>
+    {% endif %}
+    {% if result.s_chart %}
+    <div class="matrix-item">
+        <img src="data:image/png;base64,{{ result.s_chart }}" alt="Singular values" class="matrix-img">
+        <span class="img-label">Singular values — log scale (ch: {{ channel }})</span>
+    </div>
+    {% endif %}
+    {% if result.vt_heatmap %}
+    <div class="matrix-item">
+        <img src="data:image/png;base64,{{ result.vt_heatmap }}" alt="Vt heatmap" class="matrix-img">
+        <span class="img-label">V&#7488; matrix — first 50 rows (ch: {{ channel }})</span>
+    </div>
+    {% endif %}
+</div>

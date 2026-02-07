@@ -1,116 +1,396 @@
 {% extends "core/base.html" %}
-{% block title %}SVDash — Upload{% endblock %}
+{% block title %}SVDash — {{ analysis }}{% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1 class="hero-title">Image Decomposition<br><span class="hero-accent">Analysis Engine</span></h1>
-    <p class="hero-sub">Upload an image to perform SVD/PCA decomposition. Analyze singular values, reconstruct at variable rank, and measure quality metrics.</p>
-
-    <div class="server-status">
-        <span class="status-dot {% if server_ok %}status-ok{% else %}status-err{% endif %}"></span>
-        <span class="status-text">Compute server: {% if server_ok %}online (MPS){% else %}offline{% endif %}</span>
+<!-- ─── Header ──────────────────────────────────────────────────────────── -->
+<div class="analysis-header">
+    <div>
+        <h1 class="analysis-title">{{ analysis }}</h1>
+        <div class="analysis-meta">
+            <span class="meta-tag">{{ analysis.width }}x{{ analysis.height }} px</span>
+            <span class="meta-tag">k={{ analysis.n_components }}/{{ analysis.max_components }}</span>
+            {% if is_grayscale %}<span class="meta-tag">grayscale</span>{% else %}<span class="meta-tag">RGB</span>{% endif %}
+            <span class="meta-tag">{{ analysis.compute_time }}s</span>
+            <span class="meta-tag">{{ analysis.created_at|date:"d M Y H:i" }}</span>
+        </div>
     </div>
-</div>
-
-<div class="upload-section">
-    <form method="post" action="{% url 'upload' %}" enctype="multipart/form-data" class="upload-form" id="upload-form">
-        {% csrf_token %}
-
-        <div class="form-group">
-            <label class="form-label" for="id_title">Analysis Name</label>
-            {{ form.title }}
-        </div>
-
-        <div class="drop-zone" id="drop-zone">
-            <div class="drop-zone-inner">
-                <div class="drop-icon">⬡</div>
-                <p class="drop-text">Drop image here or <label for="id_image" class="drop-browse">browse</label></p>
-                <p class="drop-hint">JPG, PNG — any resolution</p>
-                {{ form.image }}
-            </div>
-            <div class="drop-preview" id="drop-preview" style="display:none;">
-                <img id="preview-img" src="" alt="Preview">
-                <span class="preview-name" id="preview-name"></span>
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
-            <span class="btn-icon">▸</span>
-            Decompose
-        </button>
-    </form>
-</div>
-
-{% if recent %}
-<div class="recent-section">
-    <h2 class="section-title">Recent Analyses</h2>
-    <div class="recent-grid">
-        {% for a in recent %}
-        <a href="{% url 'analysis' pk=a.pk %}" class="recent-card">
-            <div class="recent-thumb">
-                <img src="{{ a.image.url }}" alt="{{ a.title }}">
-            </div>
-            <div class="recent-info">
-                <span class="recent-name">{{ a }}</span>
-                <span class="recent-meta">{{ a.width }}×{{ a.height }} · k₉₅={{ a.k_95 }} · SSIM={{ a.ssim }}</span>
-            </div>
+    <div class="header-actions">
+        <a href="{% url 'export_csv' pk=analysis.pk %}" class="btn btn-ghost btn-sm">
+            <span class="btn-icon">&#x2913;</span> CSV
         </a>
-        {% endfor %}
+        <a href="{% url 'download_pdf' pk=analysis.pk %}" class="btn btn-ghost btn-sm">
+            <span class="btn-icon">&#x25A3;</span> PDF
+        </a>
     </div>
+</div>
+
+<!-- ─── 01 Overview ─────────────────────────────────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">01</span> Overview</h2>
+    <div class="overview-grid">
+        <div class="overview-image">
+            {% if images.original %}
+            <img src="{{ images.original }}" alt="Original" class="result-img">
+            <span class="img-label">Original</span>
+            {% else %}
+            <img src="{{ analysis.image.url }}" alt="Original" class="result-img">
+            <span class="img-label">Original (uploaded)</span>
+            {% endif %}
+        </div>
+        <div class="overview-stats">
+            <div class="stat-card">
+                <span class="stat-label">PSNR <span class="tooltip" data-tooltip="Peak Signal-to-Noise Ratio: misura la qualità della ricostruzione in decibel. Valori più alti indicano una ricostruzione più fedele all'originale. Sopra 40 dB la differenza è quasi impercettibile.">(?)</span></span>
+                <span class="stat-value highlight">{{ analysis.psnr }} dB</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">SSIM <span class="tooltip" data-tooltip="Structural Similarity Index: confronta luminosità, contrasto e struttura tra originale e ricostruzione. Va da 0 a 1, dove 1 significa immagini identiche. Valori sopra 0.95 sono eccellenti.">(?)</span></span>
+                <span class="stat-value highlight">{{ analysis.ssim }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">k&#x2089;&#x2080; <span class="tooltip" data-tooltip="Numero minimo di componenti necessarie per catturare il 90% della varianza totale dell'immagine. Meno componenti servono, più l'immagine è comprimibile.">(?)</span></span>
+                <span class="stat-value">{{ analysis.k_90 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">k&#x2089;&#x2085; <span class="tooltip" data-tooltip="Componenti per il 95% della varianza. Soglia comune per una buona ricostruzione con pochi artefatti visibili.">(?)</span></span>
+                <span class="stat-value">{{ analysis.k_95 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">k&#x2089;&#x2089; <span class="tooltip" data-tooltip="Componenti per il 99% della varianza. Ricostruzione quasi perfetta, ma con meno compressione.">(?)</span></span>
+                <span class="stat-value">{{ analysis.k_99 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Compression <span class="tooltip" data-tooltip="Rapporto tra la dimensione originale e quella compressa con SVD troncata. Un valore di 10x significa che servono 10 volte meno dati per la ricostruzione.">(?)</span></span>
+                <span class="stat-value">{{ results.metrics.compression_ratio }}x</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Components</span>
+                <span class="stat-value">{{ analysis.n_components }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Max k</span>
+                <span class="stat-value">{{ analysis.max_components }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── 01b Compression Stats ──────────────────────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">01b</span> Compression Stats <span class="tooltip" data-tooltip="Confronto tra lo spazio occupato dall'immagine originale (H×W×3 byte) e lo spazio necessario per memorizzare la decomposizione SVD troncata a rango k: (H×k + k + k×W) × canali × 4 byte (float32).">(?)</span></h2>
+    <div class="compression-grid">
+        <div class="compress-stat">
+            <span class="compress-label">Original</span>
+            <span class="compress-value">{{ compression_stats.original_mb }} MB</span>
+        </div>
+        <div class="compress-stat">
+            <span class="compress-label">Rank-k (float32)</span>
+            <span class="compress-value">{{ compression_stats.rankk_mb }} MB</span>
+        </div>
+        <div class="compress-stat">
+            <span class="compress-label">Savings</span>
+            <span class="compress-value highlight">{{ compression_stats.savings_pct }}%</span>
+        </div>
+        <div class="compress-stat">
+            <span class="compress-label">Saved</span>
+            <span class="compress-value">{{ compression_stats.savings_mb }} MB</span>
+        </div>
+    </div>
+</div>
+
+<!-- ─── 02 Singular Values & Cumulative Variance ────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">02</span> Spectral Analysis <span class="tooltip" data-tooltip="I valori singolari (σ) rappresentano l'importanza di ogni componente. La varianza cumulata mostra quanta informazione viene catturata sommando le prime k componenti. Le linee tratteggiate indicano le soglie 90%, 95% e 99%.">(?)</span></h2>
+    <div class="charts-row">
+        <div class="chart-container" id="sv-chart"></div>
+        <div class="chart-container" id="cv-chart"></div>
+    </div>
+</div>
+
+<!-- ─── 03 SVD Matrices ─────────────────────────────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">03</span> SVD Matrices (U, S, V&#7488;) <span class="tooltip" data-tooltip="La decomposizione A = U·S·Vᵀ. U contiene i pattern spaziali verticali (autoimmagini), S i valori singolari sulla diagonale, Vᵀ i pattern orizzontali. L'heatmap mostra le prime 50 colonne/righe per visualizzare la struttura.">(?)</span></h2>
+
+    <div class="channel-selector" id="matrix-channel-selector">
+        {% if is_grayscale %}
+        <button class="chan-btn active" data-channel="L"
+                hx-get="{% url 'htmx_matrices' pk=analysis.pk %}?channel=L"
+                hx-target="#matrices-content" hx-indicator="#matrices-spinner">L</button>
+        {% else %}
+        <button class="chan-btn active" data-channel="R"
+                hx-get="{% url 'htmx_matrices' pk=analysis.pk %}?channel=R"
+                hx-target="#matrices-content" hx-indicator="#matrices-spinner">R</button>
+        <button class="chan-btn" data-channel="G"
+                hx-get="{% url 'htmx_matrices' pk=analysis.pk %}?channel=G"
+                hx-target="#matrices-content" hx-indicator="#matrices-spinner">G</button>
+        <button class="chan-btn" data-channel="B"
+                hx-get="{% url 'htmx_matrices' pk=analysis.pk %}?channel=B"
+                hx-target="#matrices-content" hx-indicator="#matrices-spinner">B</button>
+        {% endif %}
+    </div>
+
+    <div id="matrices-spinner" class="recon-spinner">
+        <span class="spinner">&#x25CC;</span> Loading matrices...
+    </div>
+
+    <div id="matrices-content">
+        {% if images.u_heatmap or images.s_chart or images.vt_heatmap %}
+        <div class="matrices-grid">
+            {% if images.u_heatmap %}
+            <div class="matrix-item">
+                <img src="{{ images.u_heatmap }}" alt="U heatmap" class="matrix-img">
+                <span class="img-label">U matrix — first 50 columns</span>
+            </div>
+            {% endif %}
+            {% if images.s_chart %}
+            <div class="matrix-item">
+                <img src="{{ images.s_chart }}" alt="Singular values" class="matrix-img">
+                <span class="img-label">Singular values (log scale)</span>
+            </div>
+            {% endif %}
+            {% if images.vt_heatmap %}
+            <div class="matrix-item">
+                <img src="{{ images.vt_heatmap }}" alt="Vt heatmap" class="matrix-img">
+                <span class="img-label">V&#7488; matrix — first 50 rows</span>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="components-hint">Matrix visualizations not available. Re-upload the image to generate them.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ─── 04 Reconstruction ───────────────────────────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">04</span> Reconstruction <span class="tooltip" data-tooltip="Ricostruzione dell'immagine usando solo le prime k componenti SVD. Muovi lo slider per cambiare k in tempo reale. La mappa differenza amplifica 5× l'errore per renderlo visibile. L'heatmap mostra l'errore MSE per pixel.">(?)</span></h2>
+
+    <div class="slider-control">
+        <label class="slider-label">
+            Components k = <strong id="slider-value">{{ analysis.n_components }}</strong> / {{ analysis.max_components }}
+        </label>
+        <input type="range" class="slider" id="recon-slider"
+               min="1" max="{{ analysis.max_components }}" value="{{ analysis.n_components }}"
+               hx-get="{% url 'htmx_reconstruct' pk=analysis.pk %}"
+               hx-target="#recon-result"
+               hx-trigger="change"
+               hx-indicator="#recon-loading"
+               hx-vals="js:{n_components: document.getElementById('recon-slider').value}"
+               name="n_components">
+        <div class="slider-marks">
+            <span>1</span>
+            <span>{{ analysis.k_90 }} (90%)</span>
+            <span>{{ analysis.k_95 }} (95%)</span>
+            <span>{{ analysis.max_components }}</span>
+        </div>
+    </div>
+
+    <div id="recon-loading" class="recon-spinner">
+        <span class="spinner">&#x25CC;</span> Reconstructing...
+    </div>
+
+    <div id="recon-result">
+        {% if images.reconstructed %}
+        <div class="recon-grid">
+            <div class="recon-img-wrap">
+                <img src="{{ images.reconstructed }}" alt="Reconstructed" class="result-img">
+                <span class="img-label">Reconstructed (k={{ analysis.n_components }})</span>
+            </div>
+            {% if images.difference %}
+            <div class="recon-img-wrap">
+                <img src="{{ images.difference }}" alt="Difference" class="result-img">
+                <span class="img-label">Difference (5x amplified)</span>
+            </div>
+            {% endif %}
+        </div>
+        {% if images.error_heatmap %}
+        <div class="error-heatmap-wrap">
+            <img src="{{ images.error_heatmap }}" alt="Error heatmap" class="result-img">
+            <span class="img-label">Error Heatmap — MSE per pixel <span class="tooltip" data-tooltip="Mappa di calore dell'errore quadratico medio per ogni pixel. Le zone più chiare/calde indicano dove la ricostruzione SVD perde più informazione. Utile per identificare i dettagli che richiedono più componenti.">(?)</span></span>
+        </div>
+        {% endif %}
+        <div class="recon-metrics">
+            <div class="metric">
+                <span class="metric-label">PSNR</span>
+                <span class="metric-value">{{ analysis.psnr }} dB</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">SSIM</span>
+                <span class="metric-value">{{ analysis.ssim }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Compression</span>
+                <span class="metric-value">{{ results.metrics.compression_ratio }}x</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ─── 05 Multi-k Comparison ──────────────────────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">05</span> Multi-k Comparison <span class="tooltip" data-tooltip="Griglia di ricostruzioni a diversi valori di k (1, 5, 10, 25, 50, 100, 200). Permette di confrontare visivamente come la qualità migliora aggiungendo componenti. Ogni cella mostra PSNR e SSIM.">(?)</span></h2>
+
+    <div id="multi-k-loading" class="recon-spinner">
+        <span class="spinner">&#x25CC;</span> Generating comparison grid...
+    </div>
+
+    <div id="multi-k-content">
+        <button class="btn btn-ghost btn-sm"
+                hx-get="{% url 'htmx_multi_k' pk=analysis.pk %}"
+                hx-target="#multi-k-content"
+                hx-indicator="#multi-k-loading"
+                hx-swap="innerHTML">
+            <span class="btn-icon">&#x25A6;</span> Generate Multi-k Grid
+        </button>
+    </div>
+</div>
+
+<!-- ─── 06 Channel Split ───────────────────────────────────────────────── -->
+{% if not is_grayscale %}
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">06</span> Channel Split <span class="tooltip" data-tooltip="I tre canali R, G, B dell'immagine originale separati e visualizzati in scala di grigi. Ogni canale viene decomposto indipendentemente nella SVD. Utile per capire quale canale contiene più dettaglio e struttura.">(?)</span></h2>
+    <div class="channel-split-grid">
+        {% if images.channel_R %}
+        <div class="channel-split-item">
+            <img src="{{ images.channel_R }}" alt="Red channel" class="result-img">
+            <span class="img-label">Red (R)</span>
+        </div>
+        {% endif %}
+        {% if images.channel_G %}
+        <div class="channel-split-item">
+            <img src="{{ images.channel_G }}" alt="Green channel" class="result-img">
+            <span class="img-label">Green (G)</span>
+        </div>
+        {% endif %}
+        {% if images.channel_B %}
+        <div class="channel-split-item">
+            <img src="{{ images.channel_B }}" alt="Blue channel" class="result-img">
+            <span class="img-label">Blue (B)</span>
+        </div>
+        {% endif %}
+    </div>
+    {% if not images.channel_R %}
+    <p class="components-hint">Channel images not available. Re-upload the image to generate them.</p>
+    {% endif %}
 </div>
 {% endif %}
+
+<!-- ─── 07 Components ───────────────────────────────────────────────────── -->
+<div class="panel">
+    <h2 class="panel-title"><span class="panel-num">{% if is_grayscale %}06{% else %}07{% endif %}</span> Individual Components <span class="tooltip" data-tooltip="Ogni componente SVD è il prodotto esterno U[:,k]·σ[k]·Vᵀ[k,:], che rappresenta un 'pattern' dell'immagine. Le prime componenti catturano la struttura grossolana (bassa frequenza), le ultime i dettagli fini (alta frequenza, rumore).">(?)</span></h2>
+
+    <div class="channel-selector" id="comp-channel-selector">
+        {% if is_grayscale %}
+        <button class="chan-btn active" data-channel="L"
+                hx-get="{% url 'htmx_components' pk=analysis.pk %}?channel=L&top_n=8"
+                hx-target="#comp-result" hx-indicator="#comp-loading">L</button>
+        {% else %}
+        <button class="chan-btn active" data-channel="R"
+                hx-get="{% url 'htmx_components' pk=analysis.pk %}?channel=R&top_n=8"
+                hx-target="#comp-result" hx-indicator="#comp-loading">R</button>
+        <button class="chan-btn" data-channel="G"
+                hx-get="{% url 'htmx_components' pk=analysis.pk %}?channel=G&top_n=8"
+                hx-target="#comp-result" hx-indicator="#comp-loading">G</button>
+        <button class="chan-btn" data-channel="B"
+                hx-get="{% url 'htmx_components' pk=analysis.pk %}?channel=B&top_n=8"
+                hx-target="#comp-result" hx-indicator="#comp-loading">B</button>
+        {% endif %}
+    </div>
+
+    <div id="comp-loading" class="recon-spinner">
+        <span class="spinner">&#x25CC;</span> Loading components...
+    </div>
+
+    <div id="comp-result">
+        <p class="components-hint">Select a channel to load component visualizations.</p>
+    </div>
+</div>
 
 {% endblock %}
 
 {% block extra_scripts %}
+{{ results_json|json_script:"results-data" }}
 <script>
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('id_image');
-const preview = document.getElementById('drop-preview');
-const previewImg = document.getElementById('preview-img');
-const previewName = document.getElementById('preview-name');
-const submitBtn = document.getElementById('submit-btn');
-const dropInner = dropZone.querySelector('.drop-zone-inner');
+// ─── Parse results data ─────────────────────────────────────────────────
+const results = JSON.parse(document.getElementById('results-data').textContent);
 
-function showPreview(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        previewImg.src = e.target.result;
-        previewName.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
-        dropInner.style.display = 'none';
-        preview.style.display = 'flex';
-        submitBtn.disabled = false;
-    };
-    reader.readAsDataURL(file);
+// ─── Plotly chart config ────────────────────────────────────────────────
+const plotLayout = {
+    paper_bgcolor: '#0f1520',
+    plot_bgcolor: '#141c28',
+    font: { family: 'JetBrains Mono, monospace', color: '#d4dce8', size: 10 },
+    margin: { t: 40, b: 50, l: 60, r: 20 },
+    xaxis: {
+        gridcolor: '#1e2a3a', gridwidth: 1, zerolinecolor: '#2a3a50',
+        title: { text: 'Component index k', font: { size: 10 } },
+    },
+    yaxis: {
+        gridcolor: '#1e2a3a', gridwidth: 1, zerolinecolor: '#2a3a50',
+    },
+    legend: { bgcolor: 'rgba(0,0,0,0)', font: { size: 9 } },
+};
+
+const plotConfig = { responsive: true, displayModeBar: false };
+
+// ─── Singular Values (log scale) ────────────────────────────────────────
+const svTraces = [];
+const chColors = { R: '#ff4444', G: '#44cc44', B: '#4488ff', L: '#cccccc' };
+
+if (results.singular_values) {
+    for (const [ch, vals] of Object.entries(results.singular_values)) {
+        svTraces.push({
+            y: vals, mode: 'lines', name: ch,
+            line: { color: chColors[ch] || '#888', width: 1.5 },
+        });
+    }
 }
 
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length) showPreview(e.target.files[0]);
-});
+Plotly.newPlot('sv-chart', svTraces, {
+    ...plotLayout,
+    title: { text: 'Singular Values', font: { size: 12 } },
+    yaxis: { ...plotLayout.yaxis, type: 'log', title: { text: 'Value (log)', font: { size: 10 } } },
+}, plotConfig);
 
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-});
-
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
-});
-
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const files = e.dataTransfer.files;
-    if (files.length) {
-        fileInput.files = files;
-        showPreview(files[0]);
+// ─── Cumulative Variance ────────────────────────────────────────────────
+const cvTraces = [];
+if (results.cumulative_variance) {
+    for (const [ch, vals] of Object.entries(results.cumulative_variance)) {
+        cvTraces.push({
+            y: vals, mode: 'lines', name: ch,
+            line: { color: chColors[ch] || '#888', width: 1.5 },
+        });
     }
-});
+}
 
-// Loading state on submit
-document.getElementById('upload-form').addEventListener('submit', () => {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="btn-icon spinner">◌</span> Computing SVD...';
+// Threshold lines
+const threshShapes = [0.90, 0.95, 0.99].map(t => ({
+    type: 'line', x0: 0, x1: 1, xref: 'paper',
+    y0: t, y1: t,
+    line: { color: '#4a5a6e', width: 1, dash: 'dot' },
+}));
+
+Plotly.newPlot('cv-chart', cvTraces, {
+    ...plotLayout,
+    title: { text: 'Cumulative Variance', font: { size: 12 } },
+    yaxis: { ...plotLayout.yaxis, title: { text: 'Variance explained', font: { size: 10 } }, range: [0, 1.05] },
+    shapes: threshShapes,
+}, plotConfig);
+
+// ─── Slider live update ─────────────────────────────────────────────────
+const slider = document.getElementById('recon-slider');
+const sliderVal = document.getElementById('slider-value');
+if (slider && sliderVal) {
+    slider.addEventListener('input', () => { sliderVal.textContent = slider.value; });
+}
+
+// ─── Channel button toggle (shared logic) ───────────────────────────────
+document.querySelectorAll('.channel-selector').forEach(sel => {
+    sel.addEventListener('click', (e) => {
+        const btn = e.target.closest('.chan-btn');
+        if (!btn) return;
+        sel.querySelectorAll('.chan-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
 });
 </script>
 {% endblock %}

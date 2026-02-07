@@ -5,9 +5,15 @@
     </div>
     <div class="recon-img-wrap">
         <img src="data:image/png;base64,{{ result.images.difference }}" alt="Difference" class="result-img">
-        <span class="img-label">Difference (5× amplified)</span>
+        <span class="img-label">Difference (5x amplified)</span>
     </div>
 </div>
+{% if result.images.error_heatmap %}
+<div class="error-heatmap-wrap">
+    <img src="data:image/png;base64,{{ result.images.error_heatmap }}" alt="Error heatmap" class="result-img">
+    <span class="img-label">Error Heatmap — MSE per pixel</span>
+</div>
+{% endif %}
 <div class="recon-metrics">
     <div class="metric">
         <span class="metric-label">PSNR</span>
@@ -19,7 +25,7 @@
     </div>
     <div class="metric">
         <span class="metric-label">Compression</span>
-        <span class="metric-value">{{ result.metrics.compression_ratio }}×</span>
+        <span class="metric-value">{{ result.metrics.compression_ratio }}x</span>
     </div>
     <div class="metric">
         <span class="metric-label">Time</span>

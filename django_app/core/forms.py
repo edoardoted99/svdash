@@ -3,6 +3,12 @@ from .models import ImageAnalysis
 
 
 class ImageUploadForm(forms.ModelForm):
+    grayscale = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-checkbox", "id": "id_grayscale"}),
+    )
+
     class Meta:
         model = ImageAnalysis
         fields = ["title", "image"]

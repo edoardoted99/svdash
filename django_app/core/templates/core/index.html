@@ -23,7 +23,7 @@
 
         <div class="drop-zone" id="drop-zone">
             <div class="drop-zone-inner">
-                <div class="drop-icon">⬡</div>
+                <div class="drop-icon">&#x2B21;</div>
                 <p class="drop-text">Drop image here or <label for="id_image" class="drop-browse">browse</label></p>
                 <p class="drop-hint">JPG, PNG — any resolution</p>
                 {{ form.image }}
@@ -34,11 +34,30 @@
             </div>
         </div>
 
+        <div class="form-group form-group-inline">
+            <label class="form-checkbox-label">
+                {{ form.grayscale }}
+                <span class="checkbox-text">Grayscale mode <span class="checkbox-hint">(single-channel luminance)</span></span>
+            </label>
+        </div>
+
         <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
-            <span class="btn-icon">▸</span>
+            <span class="btn-icon">&#x25B8;</span>
             Decompose
         </button>
     </form>
+</div>
+
+<!-- Progress overlay -->
+<div class="progress-overlay" id="progress-overlay">
+    <div class="progress-panel">
+        <div class="progress-icon"><span class="spinner">&#x25CC;</span></div>
+        <div class="progress-status" id="progress-status">Uploading image...</div>
+        <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-detail" id="progress-detail">Sending to compute server</div>
+    </div>
 </div>
 
 {% if recent %}
@@ -52,7 +71,7 @@
             </div>
             <div class="recent-info">
                 <span class="recent-name">{{ a }}</span>
-                <span class="recent-meta">{{ a.width }}×{{ a.height }} · k₉₅={{ a.k_95 }} · SSIM={{ a.ssim }}</span>
+                <span class="recent-meta">{{ a.width }}x{{ a.height }} | k95={{ a.k_95 }} | SSIM={{ a.ssim }}</span>
             </div>
         </a>
         {% endfor %}
@@ -107,10 +126,65 @@ dropZone.addEventListener('drop', (e) => {
     }
 });
 
-// Loading state on submit
-document.getElementById('upload-form').addEventListener('submit', () => {
+// ─── Progress bar + AJAX upload ─────────────────────────────────────────
+const overlay = document.getElementById('progress-overlay');
+const statusEl = document.getElementById('progress-status');
+const fillEl = document.getElementById('progress-fill');
+const detailEl = document.getElementById('progress-detail');
+
+const stages = [
+    { text: 'Uploading image...', detail: 'Sending file to server', pct: 10, delay: 0 },
+    { text: 'Computing SVD...', detail: 'Decomposing on MPS device', pct: 35, delay: 1500 },
+    { text: 'Analyzing components...', detail: 'Computing singular values & variance', pct: 55, delay: 4000 },
+    { text: 'Generating matrices...', detail: 'Rendering U, S, Vt heatmaps', pct: 75, delay: 7000 },
+    { text: 'Finalizing...', detail: 'Saving results to disk', pct: 90, delay: 12000 },
+];
+
+let stageTimers = [];
+
+document.getElementById('upload-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    // Show overlay
+    overlay.classList.add('visible');
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="btn-icon spinner">◌</span> Computing SVD...';
+
+    // Animate stages
+    stageTimers = stages.map(stage =>
+        setTimeout(() => {
+            statusEl.textContent = stage.text;
+            detailEl.textContent = stage.detail;
+            fillEl.style.width = stage.pct + '%';
+        }, stage.delay)
+    );
+
+    // Submit via fetch
+    const formData = new FormData(e.target);
+    fetch(e.target.action, {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        stageTimers.forEach(clearTimeout);
+        if (data.redirect) {
+            fillEl.style.width = '100%';
+            statusEl.textContent = 'Analysis complete';
+            detailEl.textContent = 'Redirecting to results...';
+            setTimeout(() => { window.location.href = data.redirect; }, 400);
+        } else if (data.error) {
+            overlay.classList.remove('visible');
+            submitBtn.disabled = false;
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(err => {
+        stageTimers.forEach(clearTimeout);
+        overlay.classList.remove('visible');
+        submitBtn.disabled = false;
+        alert('Connection error: ' + err.message);
+    });
 });
 </script>
 {% endblock %}

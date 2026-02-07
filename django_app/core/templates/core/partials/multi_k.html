@@ -1,0 +1,14 @@
+<div class="multi-k-grid">
+    {% for item in items %}
+    <div class="multi-k-card">
+        <img src="data:image/png;base64,{{ item.image }}" alt="k={{ item.k }}" class="multi-k-img">
+        <div class="multi-k-info">
+            <span class="multi-k-label">k={{ item.k }}</span>
+            <span class="multi-k-metric">{{ item.psnr_db }} dB</span>
+            <span class="multi-k-metric">SSIM {{ item.ssim }}</span>
+        </div>
+    </div>
+    {% empty %}
+    <p class="components-hint">No results returned.</p>
+    {% endfor %}
+</div>
